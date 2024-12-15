@@ -132,6 +132,10 @@ class DetachRocket:
     def create_new_classifier(self) -> ClassifierWrapper:
         return create_new_classifier(self.classifier_type, **self.classifier_create_params)
     
+    @property
+    def _full_classifier(self):
+        return self.classifier_wrapper.get_full_classifier()
+    
     def fit(self, X, y=None, val_set=None, val_set_y=None, X_test=None, y_test=None):
         X = ensure_3d(X)
         val_set = ensure_3d(val_set)
@@ -320,7 +324,7 @@ class DetachRocket:
 
     def score(self, X, y):
         X = ensure_3d(X)
-        
+
         assert self._is_fitted == True, "Model not fitted. Call fit method first."
 
         # Transform time series to feature matrix

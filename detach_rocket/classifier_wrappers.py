@@ -18,6 +18,9 @@ class ClassifierWrapper:
     def fit_new_model_on_chosen_hyperparams(self, X_train, y_train) -> ClassifierMixin:
         pass
 
+    def get_full_classifier(self) -> ClassifierMixin:
+        return self._full_classifier
+
 class RidgeClassifierWrapper(ClassifierWrapper):
     def __init__(self, **kwargs):
         super().__init__()
