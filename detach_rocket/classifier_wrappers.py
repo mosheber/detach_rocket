@@ -17,6 +17,15 @@ def patch_sklearn_model(sklearn_type):
     sklearn_type.coef_ = get_coef_
     sklearn_type.score = get_score
 
+def ridge_predict_proba(self, X):
+    d = self.decision_function(X)
+    if len(d.shape) == 1:
+        d = np.c_[-d, d]
+    d_exp = np.exp(d)
+    return d_exp / d_exp.sum(axis=-1, keepdims=True)
+
+RidgeClassifier.predict_proba = ridge_predict_proba
+
 class ClassifierWrapper:
     def __init__(self, **kwargs):
         pass
