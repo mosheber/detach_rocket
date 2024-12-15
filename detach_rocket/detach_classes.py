@@ -86,7 +86,6 @@ class DetachRocket:
         self._sfd_curve = None
         #self._transformer = None
         self._full_transformer = None
-        self._full_classifier = None
         self._full_model_alpha = None
         self._classifier = None
         self._feature_matrix = None
@@ -252,7 +251,7 @@ class DetachRocket:
 
         # Check if will be recomputed
         if self.recompute_hyperparams:
-            optimal_hyperparams = {}
+            optimal_hyperparams = None
         else:
             optimal_hyperparams = self.optimal_hyperparams
 
@@ -282,7 +281,7 @@ class DetachRocket:
 
         # Check if will be recomputed
         if self.recompute_hyperparams:
-            optimal_hyperparams = {}
+            optimal_hyperparams = None
         else:
             optimal_hyperparams = self.optimal_hyperparams
 

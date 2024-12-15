@@ -262,7 +262,6 @@ def retrain_optimal_model(classifier_wrapper: ClassifierWrapper,
     optimal_train = optimal_classifier.score(masked_X_train, y_train)
 
     print('TRAINING RESULTS Detach Model:')
-    print('Optimal Detach Model: {:.2f}'.format(optimal_hyperparams))
     print('Train Detach Model: {:.2f}%'.format(100*optimal_train))
     print('-------------------------')
 
