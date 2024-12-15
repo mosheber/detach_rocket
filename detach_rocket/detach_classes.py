@@ -307,16 +307,22 @@ class DetachRocket:
         
         return
 
-    def predict(self,X):
+    def get_masked_transformed(self, X):
         X = ensure_3d(X)
-        
+
         assert self._is_fitted == True, "Model not fitted. Call fit method first."
 
         # Transform time series to feature matrix
         transformed_X = np.asarray(self._full_transformer.transform(X))
         transformed_X = self._scaler.transform(transformed_X)
-        masked_transformed_X = transformed_X[:,self._feature_mask]
+        return transformed_X[:,self._feature_mask]
 
+    def predict_proba(self,X):
+        masked_transformed = self.get_masked_transformed(X)
+        return self._classifier.predict_proba(masked_transformed)
+    
+    def predict(self,X):
+        masked_transformed_X = self.get_masked_transformed(X)
         y_pred = self._classifier.predict(masked_transformed_X)
 
         return y_pred
@@ -884,6 +890,7 @@ class DetachEnsemble():
 
     # Transformer / Classifier methods
     def fit(self, X, y):
+        X = ensure_3d(X)
         [model.fit(X, y) for model in self.derockets]
         self.num_channels = X.shape[1]
         self.label_encoder.fit(y)
@@ -892,6 +899,7 @@ class DetachEnsemble():
         return self
 
     def predict_proba(self, X, proba='soft'):
+        X = ensure_3d(X)
         assert self._is_fitted == True, "Model not fitted. Call fit method first."
         weight_matrix = np.zeros((X.shape[0], len(self.label_encoder.classes_), self.num_models)) # (samples, classes, estimators)
 
