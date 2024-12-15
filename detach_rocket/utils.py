@@ -6,6 +6,8 @@ from sklearn.linear_model import (RidgeClassifierCV,RidgeClassifier)
 import numpy as np
 import matplotlib.pyplot as plt
 
+from detach_rocket.classifier_wrappers import ClassifierWrapper
+
 
 def feature_detachment(classifier,
                         X_train: np.ndarray,
@@ -205,11 +207,12 @@ def select_optimal_model(percentage_vector,
     return max_index, max_percentage
 
 
-def retrain_optimal_model(feature_mask,
+def retrain_optimal_model(classifier_wrapper: ClassifierWrapper,
+                          feature_mask,
                           X_train_scaled_transform,
                           y_train,
                           max_index,
-                          model_alpha = None,
+                          optimal_hyperparams = None,
                           verbose = True):
 
     """
@@ -243,20 +246,24 @@ def retrain_optimal_model(feature_mask,
 
     masked_X_train = X_train_scaled_transform[:,feature_mask]
 
-    if model_alpha==None:
+    if optimal_hyperparams is None:
+        classifier_wrapper.fit(masked_X_train, y_train)
+        optimal_hyperparams = classifier_wrapper.get_chosen_hyperparams()
+    else:
+        classifier_wrapper.set_chosen_hyperparams(optimal_hyperparams)
+      
       # CV to find best alpha
-      cv_classifier = RidgeClassifierCV(alphas=np.logspace(-10, 10, 20))
-      cv_classifier.fit(masked_X_train, y_train)
-      model_alpha = cv_classifier.alpha_
+    #   cv_classifier = RidgeClassifierCV(alphas=np.logspace(-10, 10, 20))
+    #   cv_classifier.fit(masked_X_train, y_train)
+    #   model_alpha = cv_classifier.alpha_
 
     # Refit with all training set
-    optimal_classifier = RidgeClassifier(alpha=model_alpha)
-    optimal_classifier.fit(masked_X_train, y_train)
-    optimal_acc_train = optimal_classifier.score(masked_X_train, y_train)
+    optimal_classifier = classifier_wrapper.fit_new_model_on_chosen_hyperparams(masked_X_train, y_train)
+    optimal_train = optimal_classifier.score(masked_X_train, y_train)
 
     print('TRAINING RESULTS Detach Model:')
-    print('Optimal Alpha Detach Model: {:.2f}'.format(model_alpha))
-    print('Train Accuraccy Detach Model: {:.2f}%'.format(100*optimal_acc_train))
+    print('Optimal Detach Model: {:.2f}'.format(optimal_hyperparams))
+    print('Train Detach Model: {:.2f}%'.format(100*optimal_train))
     print('-------------------------')
 
-    return optimal_classifier, optimal_acc_train
+    return optimal_classifier, optimal_train

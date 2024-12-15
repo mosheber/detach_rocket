@@ -2,6 +2,7 @@
 DetachRocket end-to-end model class, DetachMatrix class and DetachEnsemble class.
 """
 
+from detach_rocket.classifier_wrappers import ClassifierWrapper, create_new_classifier
 from detach_rocket.utils import (feature_detachment, select_optimal_model, retrain_optimal_model)
 
 from sklearn.linear_model import (RidgeClassifierCV ,RidgeClassifier)
@@ -14,6 +15,7 @@ from sktime.transformations.panel.rocket import (
 from sklearn.model_selection import train_test_split
 import numpy as np
 import torch
+
 
 class DetachRocket:
 
@@ -64,11 +66,13 @@ class DetachRocket:
         model_type='rocket',
         num_kernels=10000,
         trade_off=0.1,
-        recompute_alpha = True,
+        recompute_hyperparams = True,
         val_ratio=0.33,
         verbose = False,
         multilabel_type = 'max',
-        fixed_percentage = None
+        fixed_percentage = None,
+        classifier_type="RidgeClassifier",
+        **kwargs,
         ):
 
         self._sfd_curve = None
@@ -92,7 +96,7 @@ class DetachRocket:
         self.num_kernels = num_kernels
         self.trade_off = trade_off
         self.val_ratio = val_ratio
-        self.recompute_alpha = recompute_alpha
+        self.recompute_hyperparams = recompute_hyperparams
         self.verbose = verbose
         self.multilabel_type = multilabel_type
         self.fixed_percentage = fixed_percentage
@@ -109,11 +113,17 @@ class DetachRocket:
         else:
             raise ValueError('Invalid model_type argument. Choose from: "rocket", "minirocket", "multirocket" or "pytorch_minirocket".')
 
-        self._full_classifier = RidgeClassifierCV(alphas=np.logspace(-10,10,20))
+        self.classifier_create_params = kwargs
+        self.classifier_type = classifier_type
+        self.classifier_wrapper: ClassifierWrapper = self.create_new_classifier()
         self._scaler = StandardScaler(with_mean=True)
 
         return
 
+    
+    def create_new_classifier(self) -> ClassifierWrapper:
+        return create_new_classifier(self.classifier_type, **self.classifier_create_params)
+    
     def fit(self, X, y=None, val_set=None, val_set_y=None, X_test=None, y_test=None):
 
         assert y is not None, "Labels are required to fit Detach Rocket"
@@ -143,11 +153,11 @@ class DetachRocket:
             self._feature_matrix_val = self._scaler.transform(self._feature_matrix_val)
 
         # Train full rocket as baseline
-        self._full_classifier.fit(self._feature_matrix, y)
-        self._full_model_alpha = self._full_classifier.alpha_
+        self.classifier_wrapper.fit(self._feature_matrix, y)
+        self.optimal_hyperparams = self.classifier_wrapper.get_chosen_hyperparams()
 
+        
         print('TRAINING RESULTS Full ROCKET:')
-        print('Optimal Alpha Full ROCKET: {:.2f}'.format(self._full_model_alpha))
         print('Train Accuraccy Full ROCKET: {:.2f}%'.format(100*self._full_classifier.score(self._feature_matrix, y)))
         print('-------------------------')
 
@@ -171,14 +181,13 @@ class DetachRocket:
                                                                     stratify=y)
 
             # Train model for selected features
-            sfd_classifier = RidgeClassifier(alpha=self._full_model_alpha)
-            sfd_classifier.fit(X_train, y_train)
+            detach_classifier = self.classifier_wrapper.fit_new_model_on_chosen_hyperparams(X_train, y_train)
 
             # Feature Detachment
             if self.verbose == True:
                 print('Applying Sequential Feature Detachment')
 
-            self._percentage_vector, _, self._sfd_curve, self._feature_importance_matrix = feature_detachment(sfd_classifier, X_train, X_val, y_train, y_val, verbose=self.verbose, multilabel_type = self.multilabel_type)
+            self._percentage_vector, _, self._sfd_curve, self._feature_importance_matrix = feature_detachment(detach_classifier, X_train, X_val, y_train, y_val, verbose=self.verbose, multilabel_type = self.multilabel_type)
 
             self._is_fitted = True
 
@@ -197,14 +206,16 @@ class DetachRocket:
             X_test = self._scaler.transform(self._full_transformer.transform(X_test))
 
             # Train model for selected features
-            sfd_classifier = RidgeClassifier(alpha=self._full_model_alpha)
-            sfd_classifier.fit(X_train, y_train)
+            detach_classifier = self.classifier_wrapper.fit_new_model_on_chosen_hyperparams(X_train, y_train)
+
+            # sfd_classifier = RidgeClassifier(alpha=self._full_model_alpha)
+            # sfd_classifier.fit(X_train, y_train)
 
             # Feature Detachment
             if self.verbose == True:
                 print('Applying Sequential Feature Detachment')
             
-            self._percentage_vector, _, self._sfd_curve, self._feature_importance_matrix = feature_detachment(sfd_classifier, X_train, X_test, y_train, y_test, verbose=self.verbose, multilabel_type = self.multilabel_type)
+            self._percentage_vector, _, self._sfd_curve, self._feature_importance_matrix = feature_detachment(detach_classifier, X_train, X_test, y_train, y_test, verbose=self.verbose, multilabel_type = self.multilabel_type)
 
             self._is_fitted = True
 
@@ -224,21 +235,24 @@ class DetachRocket:
         self._max_index = max_index
         self._max_percentage = max_percentage
 
-        # Check if alpha will be recomputed
-        if self.recompute_alpha:
-            alpha_optimal = None
+        # Check if will be recomputed
+        if self.recompute_hyperparams:
+            optimal_hyperparams = {}
         else:
-            alpha_optimal = self._full_model_alpha
+            optimal_hyperparams = self.optimal_hyperparams
 
         # Create feature mask
         self._feature_mask = self._feature_importance_matrix[max_index]>0
 
+        classifier_wrapper = self.create_new_classifier()
+
         # Re-train optimal model
-        self._classifier, self._acc_train = retrain_optimal_model(self._feature_mask,
+        self._classifier, self._acc_train = retrain_optimal_model(classifier_wrapper,
+                                                                    self._feature_mask,
                                                                     self._feature_matrix,
                                                                     self._labels,
                                                                     self._max_index,
-                                                                    alpha_optimal,
+                                                                    optimal_hyperparams,
                                                                     verbose = self.verbose)
 
         return
@@ -251,21 +265,30 @@ class DetachRocket:
         self._max_index = (np.abs(self._percentage_vector - self.fixed_percentage)).argmin()
         self._max_percentage = self._percentage_vector[self._max_index]
 
-        # Check if alpha will be recomputed
-        if self.recompute_alpha:
-            alpha_optimal = None
+        # Check if will be recomputed
+        if self.recompute_hyperparams:
+            optimal_hyperparams = {}
         else:
-            alpha_optimal = self._full_model_alpha
+            optimal_hyperparams = self.optimal_hyperparams
+
+        # # Check if alpha will be recomputed
+        # if self.recompute_alpha:
+        #     alpha_optimal = None
+        # else:
+        #     alpha_optimal = self._full_model_alpha
 
         # Create feature mask
         self._feature_mask = self._feature_importance_matrix[self._max_index]>0
 
+        classifier_wrapper = self.create_new_classifier()
+
         # Re-train optimal model
-        self._classifier, self._acc_train = retrain_optimal_model(self._feature_mask,
+        self._classifier, self._acc_train = retrain_optimal_model(classifier_wrapper
+                                                                    self._feature_mask,
                                                                     self._feature_matrix,
                                                                     self._labels,
                                                                     self._max_index,
-                                                                    alpha_optimal,
+                                                                    optimal_hyperparams,
                                                                     verbose = self.verbose)
         
         return
