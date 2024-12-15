@@ -16,6 +16,14 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 import torch
 
+def ensure_3d(X):
+    if X is None:
+        return X
+    
+    if len(X.shape) == 2:
+        # add channel dimension = 1
+        return X[:,None,:]
+    return X
 
 class DetachRocket:
 
@@ -125,6 +133,9 @@ class DetachRocket:
         return create_new_classifier(self.classifier_type, **self.classifier_create_params)
     
     def fit(self, X, y=None, val_set=None, val_set_y=None, X_test=None, y_test=None):
+        X = ensure_3d(X)
+        val_set = ensure_3d(val_set)
+        X_test = ensure_3d(X_test)
 
         assert y is not None, "Labels are required to fit Detach Rocket"
 
@@ -294,7 +305,8 @@ class DetachRocket:
         return
 
     def predict(self,X):
-
+        X = ensure_3d(X)
+        
         assert self._is_fitted == True, "Model not fitted. Call fit method first."
 
         # Transform time series to feature matrix
@@ -307,7 +319,8 @@ class DetachRocket:
         return y_pred
 
     def score(self, X, y):
-
+        X = ensure_3d(X)
+        
         assert self._is_fitted == True, "Model not fitted. Call fit method first."
 
         # Transform time series to feature matrix
