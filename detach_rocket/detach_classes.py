@@ -283,7 +283,7 @@ class DetachRocket:
         classifier_wrapper = self.create_new_classifier()
 
         # Re-train optimal model
-        self._classifier, self._acc_train = retrain_optimal_model(classifier_wrapper
+        self._classifier, self._acc_train = retrain_optimal_model(classifier_wrapper,
                                                                     self._feature_mask,
                                                                     self._feature_matrix,
                                                                     self._labels,
