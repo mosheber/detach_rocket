@@ -122,14 +122,13 @@ class DetachRocket:
 
         self.classifier_create_params = kwargs
         self.classifier_type = classifier_type
-        self.classifier_wrapper: ClassifierWrapper = self.create_new_classifier()
         self._scaler = StandardScaler(with_mean=True)
 
         return
 
     
-    def create_new_classifier(self) -> ClassifierWrapper:
-        return create_new_classifier(self.classifier_type, **self.classifier_create_params)
+    def create_new_classifier(self, X, y) -> ClassifierWrapper:
+        return create_new_classifier(self.classifier_type, X, y, **self.classifier_create_params)
     
     @property
     def _full_classifier(self):
@@ -167,12 +166,14 @@ class DetachRocket:
             self._feature_matrix_val = self._scaler.transform(self._feature_matrix_val)
 
         # Train full rocket as baseline
+        self.classifier_wrapper: ClassifierWrapper = self.create_new_classifier(self._feature_matrix, y)
         self.classifier_wrapper.fit(self._feature_matrix, y)
         self.optimal_hyperparams = self.classifier_wrapper.get_chosen_hyperparams()
 
         
         print('TRAINING RESULTS Full ROCKET:')
-        print('Train Accuraccy Full ROCKET: {:.2f}%'.format(100*self._full_classifier.score(self._feature_matrix, y)))
+        if self._full_classifier:
+            print('Train Accuraccy Full ROCKET: {:.2f}%'.format(100*self._full_classifier.score(self._feature_matrix, y)))
         print('-------------------------')
 
         # If fixed percentage is not provided, we set the number of features using the validation set
@@ -201,7 +202,7 @@ class DetachRocket:
             if self.verbose == True:
                 print('Applying Sequential Feature Detachment')
 
-            self._percentage_vector, _, self._sfd_curve, self._feature_importance_matrix = feature_detachment(detach_classifier, X_train, X_val, y_train, y_val, verbose=self.verbose, multilabel_type = self.multilabel_type)
+            self._percentage_vector, _, self._sfd_curve, self._feature_importance_matrix = feature_detachment(self.classifier_wrapper, detach_classifier, X_train, X_val, y_train, y_val, verbose=self.verbose, multilabel_type = self.multilabel_type)
 
             self._is_fitted = True
 
@@ -229,7 +230,7 @@ class DetachRocket:
             if self.verbose == True:
                 print('Applying Sequential Feature Detachment')
             
-            self._percentage_vector, _, self._sfd_curve, self._feature_importance_matrix = feature_detachment(detach_classifier, X_train, X_test, y_train, y_test, verbose=self.verbose, multilabel_type = self.multilabel_type)
+            self._percentage_vector, _, self._sfd_curve, self._feature_importance_matrix = feature_detachment(self.classifier_wrapper, detach_classifier, X_train, X_test, y_train, y_test, verbose=self.verbose, multilabel_type = self.multilabel_type)
 
             self._is_fitted = True
 
@@ -258,7 +259,7 @@ class DetachRocket:
         # Create feature mask
         self._feature_mask = self._feature_importance_matrix[max_index]>0
 
-        classifier_wrapper = self.create_new_classifier()
+        classifier_wrapper = self.create_new_classifier(self._feature_matrix, self._labels)
 
         # Re-train optimal model
         self._classifier, self._acc_train = retrain_optimal_model(classifier_wrapper,
@@ -294,7 +295,7 @@ class DetachRocket:
         # Create feature mask
         self._feature_mask = self._feature_importance_matrix[self._max_index]>0
 
-        classifier_wrapper = self.create_new_classifier()
+        classifier_wrapper = self.create_new_classifier(self._feature_matrix, self._labels)
 
         # Re-train optimal model
         self._classifier, self._acc_train = retrain_optimal_model(classifier_wrapper,
@@ -337,7 +338,10 @@ class DetachRocket:
         transformed_X = self._scaler.transform(transformed_X)
         masked_transformed_X = transformed_X[:,self._feature_mask]
 
-        return self._classifier.score(masked_transformed_X, y), self._full_classifier.score(transformed_X, y)
+        _full_classifier_score = 0
+        if self._full_classifier:
+            _full_classifier_score = self._full_classifier.score(transformed_X, y)
+        return self._classifier.score(masked_transformed_X, y), _full_classifier_score
 
 
 class DetachMatrix:

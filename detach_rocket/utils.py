@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 from detach_rocket.classifier_wrappers import ClassifierWrapper
 
 
-def feature_detachment(classifier,
+def feature_detachment(classifier_wrapper: ClassifierWrapper,
+                        classifier,
                         X_train: np.ndarray,
                         X_test: np.ndarray,
                         y_train: np.ndarray,
@@ -108,7 +109,7 @@ def feature_detachment(classifier,
         X_test_subsampled = X_test[:,selection_mask]
 
         # Train model for selected features
-        classifier.fit(X_train_subsampled, y_train)
+        classifier = classifier_wrapper.fit_new_model_on_chosen_hyperparams(X_train_subsampled, y_train)
 
         # Compute scores for train and test sets
         avg_score_train = classifier.score(X_train_subsampled, y_train)
