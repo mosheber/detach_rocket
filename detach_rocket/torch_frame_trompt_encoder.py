@@ -220,9 +220,8 @@ class BatchNeuralNetClassifier(NeuralNetClassifier):
         """
         if iterator is None:
             return
-        print("begin iter")
         batch_count = 0
-        for batch in iterator:
+        for batch in tqdm(iterator):
             self.notify("on_batch_begin", batch=batch, training=training)
             step = step_fn(batch, **fit_params)
             self.history.record_batch(prefix + "_loss", step["loss"].item())
@@ -231,7 +230,6 @@ class BatchNeuralNetClassifier(NeuralNetClassifier):
             self.history.record_batch(prefix + "_batch_size", batch_size)
             self.notify("on_batch_end", batch=batch, training=training, **step)
             batch_count += 1
-        print("end iter")
         self.history.record(prefix + "_batch_count", batch_count)
 
     def get_loss(self, y_pred, y_true, *args, **kwargs):
